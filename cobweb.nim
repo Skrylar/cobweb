@@ -35,6 +35,9 @@ proc make_cobweb*(): Cobweb =
   result.intern_table = initTable[string, BindingId]()
   newseq(result.values, 0)
   newseq(result.inlets, 0)
+  newseq(result.deps, 0)
+  newseq(result.roots, 0)
+  newseq(result.order, 0)
 
 proc intern(self: var Cobweb; name: string): BindingId =
   ## Put in a name, get an identifier.  If the name is not known, create an identifier and return that.
@@ -88,9 +91,10 @@ proc touch(self: var Cobweb; name: BindingId) =
     var dirty = false
     block dirtycheck:   # check if a marked inlet affects this binding
       for candidate in self.deps:
-        if candidate in self.values[self.order[i]].inlets:
-          dirty = true
-          break dirtycheck
+        if self.values[self.order[i]].inlets != nil:
+          if candidate in self.values[self.order[i]].inlets:
+            dirty = true
+            break dirtycheck
     if dirty:                   # need to run the updater
       if self.call_updater(self.values[self.order[i]]):
         # if updater reports a change, we need to add this variable to the
@@ -121,9 +125,6 @@ proc internal_add_dependent*(self: var Cobweb; name: string; inlets: openarray[s
     echo x
 
 macro dependent*(cob: var Cobweb; variable_name: untyped, body: untyped): untyped =
-  echo variable_name
-  echo treerepr(body)
-
   # must provide a valid identifier for a variable name
   expectkind(variable_name, nnkIdent)
 
@@ -186,14 +187,6 @@ macro dependent*(cob: var Cobweb; variable_name: untyped, body: untyped): untype
     out_body,                                      # proc body
     nnkLambda)                                     # proc type
 
-  #echo repr lmb
-
   result = newcall(bindsym"internal_add_dependent", cob, new_str_lit_node($variable_name), inletnode, lmb)
 
   echo repr result
-
-macro butt(input: untyped): untyped =
-  echo treerepr(input)
-
-butt(proc(a: openarray[JsonNode]) =
-  let x = proc(result: var JsonValue; piss: openarray[string]) = discard)
