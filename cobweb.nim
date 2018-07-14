@@ -35,9 +35,12 @@ type
   MapEventProc* [E, R] = proc(event: Event[E]): R {.closure.}
   MapValueProc* [V, R] = proc(value: V): R {.closure.}
 
-  Observer* [E] = ref object
+  Observer* [E] = ref object {.inheritable.}
     dead: bool
     subscriptions: seq[HandlerProc[E]]
+
+  Property* [E] = ref object of Observer[E]
+    current_value: E
 
 proc is_initial* [E](self: Event[E]): bool =
   return self.kind == etInitial
@@ -202,6 +205,15 @@ proc map_error*[E, R] (observer: Observer[E];
     return hrMore)
   return output
 
+proc value* [E](property: Property): E {.inline.} =
+  ## Returns the current value of a property.
+  return property.current_value
+
+proc `value=`* [E](property: Property[E]; new_value: E) {.inline.} =
+  ## Sets the new value of a property, and updates subscribers.
+  property.current_value = new_value
+  property.dispatch(new_value)
+
 when isMainModule:
   import unittest, math
 
@@ -238,4 +250,14 @@ when isMainModule:
     check accumlator == 100
     o.dispatch(-100)
     check accumlator == 200
+
+  test "Property subscription":
+    var prop = new(Property[int])
+    var target = 0
+
+    prop.do_action do(value: int):
+      target = value
+
+    prop.value = 42
+    check target == 42
 
