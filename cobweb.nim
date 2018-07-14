@@ -26,7 +26,10 @@ type
     hrMore   ## Remain subscribed.
     hrNoMore ## Remove me from your subscriptions.
 
-  HandlerProc* [E] = proc(event: Event[E]): HandlerResult
+  HandlerProc* [E] = proc(event: Event[E]): HandlerResult {.closure.}
+  DoActionProc* [V] = proc(value: V) {.closure.}
+  FilterEventProc* [E] = proc(event: E): bool {.closure.}
+  FilterValueProc* [V] = proc(value: V): bool {.closure.}
 
   Observer* [E] = ref object
     dead: bool
@@ -56,7 +59,7 @@ method dispatch*[E] (observer: Observer[E]; value: E) {.base.} =
   event.created_at = 0 # TODO get current system time
   event.value = value
 
-  template subs = observer.subscriptions
+  template subs: untyped = observer.subscriptions
 
   # transmit the event
   var idx = 0
@@ -96,6 +99,40 @@ proc sink*[E] (observer: Observer[E]): SinkProc[E] =
         return srNoMore
       else:
         return srMore
+
+proc do_action*[E] (observer: Observer[E]; fn: DoActionProc[E]) =
+  observer.subscribe(proc (event: E): HandlerResult =
+    if event.is_next:
+      fn(event.value)
+    return hrMore)
+
+proc keep*[E] (observer: Observer[E]; fn: FilterEventProc[E]): Observer[E] =
+  var output = new(Observer[E])
+  observer.subscribe(proc (event: Event[E]): HandlerProc =
+    if event.is_next == true and fn(event) == true:
+      output.dispatch(event)
+  return output
+
+proc keep*[E] (observer: Observer[E]; fn: FilterValueProc[E]) =
+  var output = new(Observer[E])
+  observer.subscribe(proc (event: Event[E]): HandlerProc =
+    if event.is_next == true and fn(event.value) == true:
+      output.dispatch(event)
+  return output
+
+proc drop*[E] (observer: Observer[E]; fn: FilterEventProc[E]): Observer[E] =
+  var output = new(Observer[E])
+  observer.subscribe(proc (event: Event[E]): HandlerProc =
+    if event.is_next == true and fn(event) == false:
+      output.dispatch(event)
+  return output
+
+proc drop*[E] (observer: Observer[E]; fn: FilterValueProc[E]) =
+  var output = new(Observer[E])
+  observer.subscribe(proc (event: Event[E]): HandlerProc =
+    if event.is_next == true and fn(event.value) == false:
+      output.dispatch(event)
+  return output
 
 when isMainModule:
   import unittest
