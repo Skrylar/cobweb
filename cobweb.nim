@@ -22,9 +22,13 @@ type
     of etEnd:
       discard
 
-  HandlerProc* [E] = proc(event: Event[E])
+  HandlerResult* = enum
+    hrMore   ## Remain subscribed.
+    hrNoMore ## Remove me from your subscriptions.
 
-  Observer* [E] = object
+  HandlerProc* [E] = proc(event: Event[E]): HandlerResult
+
+  Observer* [E] = ref object
     dead: bool
     subscriptions: seq[HandlerProc[E]]
 
@@ -52,16 +56,23 @@ method dispatch*[E] (observer: Observer[E]; value: E) {.base.} =
   event.created_at = 0 # TODO get current system time
   event.value = value
 
+  template subs = observer.subscriptions
+
   # transmit the event
-  for s in observer.subscriptions:
-    # TODO check return result; might have to remove subscribers
-    s(event)
+  var idx = 0
+  while idx < subs.len:
+    var s = subs[idx]
+    case s(event)
+    of hrMore:
+      inc idx
+    of hrNoMore:
+      subs.delete(idx)
 
 method on_subscription*[E] (observer: Observer[E]; fn: HandlerProc) {.base.} =
   ## Default observers don't react to new subscriptions.
   discard
 
-proc subscribe*[E] (observer: var Observer[E]; handler: HandlerProc[E]) =
+proc subscribe*[E] (observer: Observer[E]; handler: HandlerProc[E]) =
   ## Attaches a new handler to an existing observable. It
   ## will receive the raw event object for inspection.
   assert(handler != nil) # sanity test
@@ -90,10 +101,11 @@ when isMainModule:
   import unittest
 
   test "Sinking":
-    var o: Observer[string]
+    var o = new(Observer[string])
     var target = false
-    o.subscribe(proc (event: Event[string]) =
-      target = true)
+    o.subscribe(proc (event: Event[string]): HandlerResult =
+      target = true
+      return hrMore)
     var s = o.sink()
     check s("boo!") == srMore
     check target == true
