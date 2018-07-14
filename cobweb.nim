@@ -105,37 +105,41 @@ proc sink*[E] (observer: Observer[E]): SinkProc[E] =
         return srMore
 
 proc do_action*[E] (observer: Observer[E]; fn: DoActionProc[E]) =
-  observer.subscribe(proc (event: E): HandlerResult =
+  observer.subscribe(proc (event: Event[E]): HandlerResult =
     if event.is_next:
       fn(event.value)
     return hrMore)
 
 proc keep*[E] (observer: Observer[E]; fn: FilterEventProc[E]): Observer[E] =
   var output = new(Observer[E])
-  observer.subscribe(proc (event: Event[E]): HandlerProc =
+  observer.subscribe(proc (event: Event[E]): HandlerResult =
     if event.is_next == true and fn(event) == true:
-      output.dispatch(event))
+      dispatch[E](output, event)
+    return hrMore)
   return output
 
-proc keep*[E] (observer: Observer[E]; fn: FilterValueProc[E]) =
+proc keep*[E] (observer: Observer[E]; fn: FilterValueProc[E]): Observer[E] =
   var output = new(Observer[E])
-  observer.subscribe(proc (event: Event[E]): HandlerProc =
+  observer.subscribe(proc(event: Event[E]): HandlerResult =
     if event.is_next == true and fn(event.value) == true:
-      output.dispatch(event))
+      dispatch(output, event)
+    return hrMore)
   return output
 
 proc drop*[E] (observer: Observer[E]; fn: FilterEventProc[E]): Observer[E] =
   var output = new(Observer[E])
-  observer.subscribe(proc (event: Event[E]): HandlerProc =
+  observer.subscribe(proc (event: Event[E]): HandlerResult =
     if event.is_next == true and fn(event) == false:
-      output.dispatch(event))
+      output.dispatch[E](event)
+    return hrMore)
   return output
 
-proc drop*[E] (observer: Observer[E]; fn: FilterValueProc[E]) =
+proc drop*[E] (observer: Observer[E]; fn: FilterValueProc[E]): Observer[E] =
   var output = new(Observer[E])
-  observer.subscribe(proc (event: Event[E]): HandlerProc =
+  observer.subscribe(proc (event: Event[E]): HandlerResult =
     if event.is_next == true and fn(event.value) == false:
-      output.dispatch(event))
+      output.dispatch[E](event)
+    return hrMore)
   return output
 
 when isMainModule:
@@ -150,4 +154,16 @@ when isMainModule:
     var s = o.sink()
     check s("boo!") == srMore
     check target == true
+
+  test "Keeping events":
+    var accumlator = 0
+    var o = new(Observer[int])
+    var filtered = o.keep(proc(input: int): bool = return input > 0)
+    filtered.do_action proc(value: int) = inc accumlator, value
+
+    check accumlator == 0
+    o.dispatch(100)
+    check accumlator == 100
+    o.dispatch(-100)
+    check accumlator == 100
 
