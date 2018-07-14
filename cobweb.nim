@@ -28,6 +28,8 @@ type
 
   HandlerProc* [E] = proc(event: Event[E]): HandlerResult {.closure.}
   DoActionProc* [V] = proc(value: V) {.closure.}
+  OnErrorProc* = proc(error: Exception) {.closure.}
+  OnEndProc* = proc() {.closure.}
   FilterEventProc* [E] = proc(event: Event[E]): bool {.closure.}
   FilterValueProc* [V] = proc(value: V): bool {.closure.}
   MapEventProc* [E, R] = proc(event: Event[E]): R {.closure.}
@@ -124,6 +126,18 @@ proc do_action*[E] (observer: Observer[E]; fn: DoActionProc[E]) =
   observer.subscribe(proc (event: Event[E]): HandlerResult =
     if event.is_next:
       fn(event.value)
+    return hrMore)
+
+proc on_error*[E] (observer: Observer[E]; fn: OnErrorProc) =
+  observer.subscribe(proc (event: Event[E]): HandlerResult =
+    if event.is_error:
+      fn(event.error)
+    return hrMore)
+
+proc on_end*[E] (observer: Observer[E]; fn: OnEndProc) =
+  observer.subscribe(proc (event: Event[E]): HandlerResult =
+    if event.is_end:
+      fn()
     return hrMore)
 
 proc keep*[E] (observer: Observer[E]; fn: FilterEventProc[E]): Observer[E] =
