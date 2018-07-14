@@ -52,6 +52,7 @@ proc is_error* [E](self: Event[E]): bool =
 proc dispatch*[E] (observer: Observer[E]; event: Event[E]) =
   ## Sends an event to all subscribers of this observer.
   template subs: untyped = observer.subscriptions
+  if observer.dead: return
   if subs == nil or subs.len < 1:
     # sanity check
     return
@@ -91,6 +92,19 @@ proc subscribe*[E] (observer: Observer[E]; handler: HandlerProc[E]) =
 
   observer.subscriptions.add(handler)
   on_subscription(observer, handler) # some streams care about this
+
+proc close*[E] (observer: Observer[E]) =
+  ## Marks an observer as closed; an `end` event is
+  ## dispatched and the observer is marked dead.
+
+  # create final event
+  var e: Event[E]
+  e.kind = etEnd
+  e.created_at = 0 # TODO
+
+  # RIP
+  observer.dispatch(e)
+  observer.dead = true
 
 proc sink*[E] (observer: Observer[E]): SinkProc[E] =
   ## Produces a sink closure. Calling this closure and
