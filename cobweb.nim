@@ -28,7 +28,7 @@ type
 
   HandlerProc* [E] = proc(event: Event[E]): HandlerResult {.closure.}
   DoActionProc* [V] = proc(value: V) {.closure.}
-  FilterEventProc* [E] = proc(event: E): bool {.closure.}
+  FilterEventProc* [E] = proc(event: Event[E]): bool {.closure.}
   FilterValueProc* [V] = proc(value: V): bool {.closure.}
 
   Observer* [E] = ref object
@@ -47,19 +47,12 @@ proc is_end* [E](self: Event[E]): bool =
 proc is_error* [E](self: Event[E]): bool =
   return self.kind == etError
 
-method dispatch*[E] (observer: Observer[E]; value: E) {.base.} =
+proc dispatch*[E] (observer: Observer[E]; event: Event[E]) =
   ## Sends an event to all subscribers of this observer.
-  if observer.subscriptions == nil or observer.subscriptions.len < 1:
+  template subs: untyped = observer.subscriptions
+  if subs == nil or subs.len < 1:
     # sanity check
     return
-
-  # construct the event
-  var event: Event[E]
-  event.kind = etNext
-  event.created_at = 0 # TODO get current system time
-  event.value = value
-
-  template subs: untyped = observer.subscriptions
 
   # transmit the event
   var idx = 0
@@ -70,6 +63,17 @@ method dispatch*[E] (observer: Observer[E]; value: E) {.base.} =
       inc idx
     of hrNoMore:
       subs.delete(idx)
+
+proc dispatch*[E] (observer: Observer[E]; value: E) =
+  ## Sends an event to all subscribers of this observer.
+
+  # construct the event
+  var event: Event[E]
+  event.kind = etNext
+  event.created_at = 0 # TODO get current system time
+  event.value = value
+
+  observer.dispatch(event)
 
 method on_subscription*[E] (observer: Observer[E]; fn: HandlerProc) {.base.} =
   ## Default observers don't react to new subscriptions.
@@ -110,28 +114,28 @@ proc keep*[E] (observer: Observer[E]; fn: FilterEventProc[E]): Observer[E] =
   var output = new(Observer[E])
   observer.subscribe(proc (event: Event[E]): HandlerProc =
     if event.is_next == true and fn(event) == true:
-      output.dispatch(event)
+      output.dispatch(event))
   return output
 
 proc keep*[E] (observer: Observer[E]; fn: FilterValueProc[E]) =
   var output = new(Observer[E])
   observer.subscribe(proc (event: Event[E]): HandlerProc =
     if event.is_next == true and fn(event.value) == true:
-      output.dispatch(event)
+      output.dispatch(event))
   return output
 
 proc drop*[E] (observer: Observer[E]; fn: FilterEventProc[E]): Observer[E] =
   var output = new(Observer[E])
   observer.subscribe(proc (event: Event[E]): HandlerProc =
     if event.is_next == true and fn(event) == false:
-      output.dispatch(event)
+      output.dispatch(event))
   return output
 
 proc drop*[E] (observer: Observer[E]; fn: FilterValueProc[E]) =
   var output = new(Observer[E])
   observer.subscribe(proc (event: Event[E]): HandlerProc =
     if event.is_next == true and fn(event.value) == false:
-      output.dispatch(event)
+      output.dispatch(event))
   return output
 
 when isMainModule:
