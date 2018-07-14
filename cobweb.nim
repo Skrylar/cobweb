@@ -56,6 +56,17 @@ method on_subscription*[E] (observer: Observer[E]; fn: HandlerProc) {.base.} =
   ## Default observers don't react to new subscriptions.
   discard
 
+proc subscribe*[E] (observer: var Observer[E]; handler: HandlerProc[E]) =
+  ## Attaches a new handler to an existing observable. It
+  ## will receive the raw event object for inspection.
+  assert(handler != nil) # sanity test
+  if observer.subscriptions == nil:
+    # more sanity problems
+    new_seq(observer.subscriptions, 0)
+
+  observer.subscriptions.add(handler)
+  on_subscription(observer, handler) # some streams care about this
+
 proc sink*[E] (observer: Observer[E]): SinkProc[E] =
   ## Produces a sink closure. Calling this closure and
   ## providing an event is equivalent to calling dispatch
@@ -75,6 +86,10 @@ when isMainModule:
 
   test "Sinking":
     var o: Observer[string]
+    var target = false
+    o.subscribe(proc (event: Event[string]) =
+      target = true)
     var s = o.sink()
     check s("boo!") == srMore
+    check target == true
 
