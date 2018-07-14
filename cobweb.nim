@@ -122,23 +122,26 @@ proc sink*[E] (observer: Observer[E]): SinkProc[E] =
       else:
         return srMore
 
-proc do_action*[E] (observer: Observer[E]; fn: DoActionProc[E]) =
+proc do_action*[E] (observer: Observer[E]; fn: DoActionProc[E]): Observer[E] {.discardable.} =
   observer.subscribe(proc (event: Event[E]): HandlerResult =
     if event.is_next:
       fn(event.value)
     return hrMore)
+  return observer
 
-proc on_error*[E] (observer: Observer[E]; fn: OnErrorProc) =
+proc on_error*[E] (observer: Observer[E]; fn: OnErrorProc): Observer[E] {.discardable.} =
   observer.subscribe(proc (event: Event[E]): HandlerResult =
     if event.is_error:
       fn(event.error)
     return hrMore)
+  return observer
 
-proc on_end*[E] (observer: Observer[E]; fn: OnEndProc) =
+proc on_end*[E] (observer: Observer[E]; fn: OnEndProc): Observer[E] {.discardable.} =
   observer.subscribe(proc (event: Event[E]): HandlerResult =
     if event.is_end:
       fn()
     return hrMore)
+  return observer
 
 proc keep*[E] (observer: Observer[E]; fn: FilterEventProc[E]): Observer[E] =
   var output = new(Observer[E])
@@ -182,7 +185,20 @@ proc map*[E, R] (observer: Observer[E]; fn: MapEventProc[E, R]): Observer[R] =
 proc map*[E, R] (observer: Observer[E]; fn: MapValueProc[E, R]): Observer[R] =
   var output = new(Observer[R])
   observer.subscribe(proc (event: Event[E]): HandlerResult =
-    output.dispatch(fn(event.value))
+    if event.is_next:
+      output.dispatch(fn(event.value))
+    return hrMore)
+  return output
+
+proc map_error*[E, R] (observer: Observer[E];
+                       fn: MapValueProc[Exception, R]): Observer[R] =
+  ## Accepts errors that appear in the stream, and uses a
+  ## `map` function to convert them in to another kind
+  ## of event.
+  var output = new(Observer[R])
+  observer.subscribe(proc (event: Event[E]): HandlerResult =
+    if event.is_error:
+      output.dispatch(fn(event.error))
     return hrMore)
   return output
 
