@@ -13,9 +13,14 @@ type
   SinkProc* [E] = proc(value: E): SinkResult {.closure.}
 
   Event* [E] = object
-    kind*: EventType
     created_at*: int64
-    value*: E
+    case kind*: EventType
+    of etInitial, etNext:
+      value*: E
+    of etError:
+      error*: Exception
+    of etEnd:
+      discard
 
   HandlerProc* [E] = proc(event: Event[E])
 
