@@ -30,6 +30,8 @@ type
   DoActionProc* [V] = proc(value: V) {.closure.}
   FilterEventProc* [E] = proc(event: Event[E]): bool {.closure.}
   FilterValueProc* [V] = proc(value: V): bool {.closure.}
+  MapEventProc* [E, R] = proc(event: Event[E]): R {.closure.}
+  MapValueProc* [V, R] = proc(value: V): R {.closure.}
 
   Observer* [E] = ref object
     dead: bool
@@ -142,8 +144,22 @@ proc drop*[E] (observer: Observer[E]; fn: FilterValueProc[E]): Observer[E] =
     return hrMore)
   return output
 
+proc map*[E, R] (observer: Observer[E]; fn: MapEventProc[E, R]): Observer[R] =
+  var output = new(Observer[R])
+  observer.subscribe(proc (event: Event[E]): HandlerResult =
+    output.dispatch(fn(event))
+    return hrMore)
+  return output
+
+proc map*[E, R] (observer: Observer[E]; fn: MapValueProc[E, R]): Observer[R] =
+  var output = new(Observer[R])
+  observer.subscribe(proc (event: Event[E]): HandlerResult =
+    output.dispatch(fn(event.value))
+    return hrMore)
+  return output
+
 when isMainModule:
-  import unittest
+  import unittest, math
 
   test "Sinking":
     var o = new(Observer[string])
@@ -166,4 +182,16 @@ when isMainModule:
     check accumlator == 100
     o.dispatch(-100)
     check accumlator == 100
+
+  test "Mapping events":
+    var accumlator = 0
+    var o = new(Observer[int])
+    var mapped = o.map(proc(input: int): int = return abs(input))
+    mapped.do_action proc(value: int) = inc accumlator, value
+
+    check accumlator == 0
+    o.dispatch(100)
+    check accumlator == 100
+    o.dispatch(-100)
+    check accumlator == 200
 
