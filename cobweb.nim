@@ -146,6 +146,30 @@ proc take* [E] (observer: Observer[E]; count: int): Observer[E] =
     return hrMore)
   return output
 
+proc take_until* [E, J] (observer: Observer[E]; observer2: Observer[J]): Observer[E] =
+  var output = new(Observer[E])
+  var fuse = false
+  # subscription which will blow the fuse
+  observer2.subscribe(proc (event: Event[J]): HandlerResult =
+    if event.kind == etNext:
+      fuse = true
+      output.close()
+      return hrNoMore
+    else:
+      return hrMore)
+  # subscription to route events
+  observer.subscribe(proc (event: Event[E]): HandlerResult =
+    if fuse:
+      return hrNoMore
+    else:
+      if event.kind == etEnd:
+        output.close()
+        return hrNoMore
+      else
+        output.dispatch(event)
+        return hrMore)
+  return output
+
 proc do_action*[E] (observer: Observer[E]; fn: DoActionProc[E]): Observer[E] {.discardable.} =
   observer.subscribe(proc (event: Event[E]): HandlerResult =
     if event.is_next:
