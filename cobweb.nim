@@ -47,15 +47,23 @@ type
     current_value: E
 
 proc is_initial* [E](self: Event[E]): bool =
+  ## Checks if an event represents the initial value
+  ## broadcast from a property.
   return self.kind == etInitial
 
 proc is_next* [E](self: Event[E]): bool =
+  ## Checks if an event represents a value coming through
+  ## the event stream.
   return self.kind == etNext
 
 proc is_end* [E](self: Event[E]): bool =
+  ## Checks if an event represents an event stream shutting
+  ## down.
   return self.kind == etEnd
 
 proc is_error* [E](self: Event[E]): bool =
+  ## Checks if an event represents an error in the event
+  ## stream.
   return self.kind == etError
 
 proc dispatch*[E] (observer: Observer[E]; event: Event[E]) =
@@ -203,6 +211,11 @@ proc take_until* [E, J] (observer: Observer[E]; observer2: Observer[J]): Observe
   return output
 
 proc do_action*[E] (observer: Observer[E]; fn: DoActionProc[E]): Observer[E] {.discardable.} =
+  ## Adds a procedure call that simply does something,
+  ## and has no effect on the event stream otherwise. Only
+  ## triggered when values pass through the stream. Returns
+  ## the input event stream to allow chaining, but does
+  ## not create a new event stream.
   observer.subscribe(proc (event: Event[E]): HandlerResult =
     if event.is_next:
       fn(event.value)
@@ -210,6 +223,9 @@ proc do_action*[E] (observer: Observer[E]; fn: DoActionProc[E]): Observer[E] {.d
   return observer
 
 proc on_error*[E] (observer: Observer[E]; fn: OnErrorProc): Observer[E] {.discardable.} =
+  ## Like `do_action`, but only triggers when errors have
+  ## been detected. Returns the input event stream to allow
+  ## chaining, but does not create a new event stream.
   observer.subscribe(proc (event: Event[E]): HandlerResult =
     if event.is_error:
       fn(event.error)
@@ -217,6 +233,10 @@ proc on_error*[E] (observer: Observer[E]; fn: OnErrorProc): Observer[E] {.discar
   return observer
 
 proc on_end*[E] (observer: Observer[E]; fn: OnEndProc): Observer[E] {.discardable.} =
+  ## Like `do_action`, but only triggers when impending
+  ## stream closure has been detected. Returns the input
+  ## event stream to allow chaining, but does not create
+  ## a new event stream.
   observer.subscribe(proc (event: Event[E]): HandlerResult =
     if event.is_end:
       fn()
@@ -224,6 +244,9 @@ proc on_end*[E] (observer: Observer[E]; fn: OnEndProc): Observer[E] {.discardabl
   return observer
 
 proc keep*[E] (observer: Observer[E]; fn: FilterEventProc[E]): Observer[E] =
+  ## Creates a new event stream which forwards events,
+  ## but only if the filter returns true. Receives the
+  ## event meta-data itself.
   var output = new(Observer[E])
   observer.subscribe(proc (event: Event[E]): HandlerResult =
     if event.is_next == true and fn(event) == true:
@@ -232,6 +255,10 @@ proc keep*[E] (observer: Observer[E]; fn: FilterEventProc[E]): Observer[E] =
   return output
 
 proc keep*[E] (observer: Observer[E]; fn: FilterValueProc[E]): Observer[E] =
+  ## Creates a new event stream which forwards events, but
+  ## only if the filter returns true. Receives the value
+  ## extracted from an event, and always allows errors or
+  ## end of stream notifications through.
   var output = new(Observer[E])
   observer.subscribe(proc(event: Event[E]): HandlerResult =
     case event.kind
@@ -246,6 +273,9 @@ proc keep*[E] (observer: Observer[E]; fn: FilterValueProc[E]): Observer[E] =
   return output
 
 proc drop*[E] (observer: Observer[E]; fn: FilterEventProc[E]): Observer[E] =
+  ## Creates a new event stream which forwards events, but
+  ## only if the filter procedure returns false. Receives
+  ## the event meta-data itself.
   var output = new(Observer[E])
   observer.subscribe(proc (event: Event[E]): HandlerResult =
     if event.is_next == true and fn(event) == false:
@@ -254,6 +284,10 @@ proc drop*[E] (observer: Observer[E]; fn: FilterEventProc[E]): Observer[E] =
   return output
 
 proc drop*[E] (observer: Observer[E]; fn: FilterValueProc[E]): Observer[E] =
+  ## Creates a new event stream which forwards events, but
+  ## only if the filter procedure returns false. Receives
+  ## the value extracted from an event, and always allows
+  ## errors or end of stream notifications through.
   var output = new(Observer[E])
   observer.subscribe(proc (event: Event[E]): HandlerResult =
     case event.kind
@@ -268,6 +302,10 @@ proc drop*[E] (observer: Observer[E]; fn: FilterValueProc[E]): Observer[E] =
   return output
 
 proc map*[E, R] (observer: Observer[E]; fn: MapEventProc[E, R]): Observer[R] =
+  ## Creates a new event stream that accepts input from
+  ## upstream, runs a procedure, and emits the output of
+  ## that procedure to the created event stream. Receives
+  ## the event meta-data itself.
   var output = new(Observer[R])
   observer.subscribe(proc (event: Event[E]): HandlerResult =
     output.dispatch(fn(event))
@@ -275,6 +313,11 @@ proc map*[E, R] (observer: Observer[E]; fn: MapEventProc[E, R]): Observer[R] =
   return output
 
 proc map*[E, R] (observer: Observer[E]; fn: MapValueProc[E, R]): Observer[R] =
+  ## Creates a new event stream that accepts input from
+  ## upstream, runs a procedure, and emits the output of
+  ## that procedure to the created event stream. Receives
+  ## the value extracted from an event, and always allows
+  ## errors or end of stream notifications through.
   var output = new(Observer[R])
   observer.subscribe(proc (event: Event[E]): HandlerResult =
     case event.kind
