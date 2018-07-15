@@ -290,6 +290,26 @@ proc take_while* [E] (observer: Observer[E]; fn: PredicateProc): Observer[E] =
         return hrNoMore)
   return output
 
+proc skip_while* [E] (observer: Observer[E]; fn: PredicateProc): Observer[E] =
+  ## Ignores input from a stream, until a predicate returns
+  ## false. Once the predicate returns false it will no
+  ## longer be called, and all future events are sent to
+  ## the newly returned stream.
+  var output = new(Observer[E])
+  var fuse = false
+  observer.subscribe(proc (event: Event[E]): HandlerResult =
+    case event.kind:
+    of etEnd:
+      output.close()
+      return hrNoMore
+    of etError, etInitial, etNext:
+      if not fuse and not fn():
+        fuse = true
+      if fuse:
+        output.dispatch(event)
+      return hrMore)
+  return output
+
 proc value* [E](property: Property): E {.inline.} =
   ## Returns the current value of a property.
   return property.current_value
