@@ -147,6 +147,33 @@ proc take* [E] (observer: Observer[E]; count: int): Observer[E] =
     return hrMore)
   return output
 
+proc skip_until* [E, J] (observer: Observer[E]; observer2: Observer[J]): Observer[E] =
+  ## Ignores events noticed by the observer, until a
+  ## secondary observer has sent a value. Once a value
+  ## is detected in the secondary observer, all events
+  ## from the primary observer are directed to the newly
+  ## returned observer.
+  var output = new(Observer[E])
+  var fuse = false
+  # subscription which will blow the fuse
+  observer2.subscribe(proc (event: Event[J]): HandlerResult =
+    if event.kind == etNext:
+      fuse = true
+      return hrNoMore
+    else:
+      return hrMore)
+  # subscription to route events
+  observer.subscribe(proc (event: Event[E]): HandlerResult =
+    case event.kind:
+    of etEnd:
+      output.close()
+      return hrNoMore
+    of etInitial, etError, etNext:
+      if fuse:
+        output.dispatch(event)
+      return hrMore)
+  return output
+
 proc take_until* [E, J] (observer: Observer[E]; observer2: Observer[J]): Observer[E] =
   ## Forwards inputs from the observer to a newly returned
   ## observer, until a value is read from a secondary
