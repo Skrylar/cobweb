@@ -200,8 +200,13 @@ proc map*[E, R] (observer: Observer[E]; fn: MapEventProc[E, R]): Observer[R] =
 proc map*[E, R] (observer: Observer[E]; fn: MapValueProc[E, R]): Observer[R] =
   var output = new(Observer[R])
   observer.subscribe(proc (event: Event[E]): HandlerResult =
-    if event.is_next:
+    case event.kind
+    of etNext:
       output.dispatch(fn(event.value))
+    of etInitial:
+      discard
+    of etError, etEnd:
+      output.dispatch(event)
     return hrMore)
   return output
 
