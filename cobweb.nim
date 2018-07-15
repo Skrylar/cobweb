@@ -148,6 +148,10 @@ proc take* [E] (observer: Observer[E]; count: int): Observer[E] =
   return output
 
 proc take_until* [E, J] (observer: Observer[E]; observer2: Observer[J]): Observer[E] =
+  ## Forwards inputs from the observer to a newly returned
+  ## observer, until a value is read from a secondary
+  ## observer. Once a secondary value is detected, the
+  ## output stream shuts down.
   var output = new(Observer[E])
   var fuse = false
   # subscription which will blow the fuse
@@ -269,6 +273,9 @@ proc map_error*[E, R] (observer: Observer[E];
   return output
 
 proc take_while* [E] (observer: Observer[E]; fn: PredicateProc): Observer[E] =
+  ## Forwards input from an observer to the newly returned
+  ## observer, as long as a predicate returns true. When the
+  ## predicate returns false the output stream is shut down.
   var output = new(Observer[E])
   observer.subscribe(proc (event: Event[E]): HandlerResult =
     case event.kind:
