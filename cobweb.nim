@@ -157,8 +157,14 @@ proc keep*[E] (observer: Observer[E]; fn: FilterEventProc[E]): Observer[E] =
 proc keep*[E] (observer: Observer[E]; fn: FilterValueProc[E]): Observer[E] =
   var output = new(Observer[E])
   observer.subscribe(proc(event: Event[E]): HandlerResult =
-    if event.is_next == true and fn(event.value) == true:
-      dispatch(output, event)
+    case event.kind
+    of etNext:
+      if fn(event.value) == true:
+        dispatch(output, event)
+    of etError, etEnd:
+        dispatch(output, event)
+    of etInitial:
+      discard
     return hrMore)
   return output
 
@@ -173,8 +179,14 @@ proc drop*[E] (observer: Observer[E]; fn: FilterEventProc[E]): Observer[E] =
 proc drop*[E] (observer: Observer[E]; fn: FilterValueProc[E]): Observer[E] =
   var output = new(Observer[E])
   observer.subscribe(proc (event: Event[E]): HandlerResult =
-    if event.is_next == true and fn(event.value) == false:
-      output.dispatch[E](event)
+    case event.kind
+    of etNext:
+      if fn(event.value) == false:
+        dispatch(output, event)
+    of etError, etEnd:
+        dispatch(output, event)
+    of etInitial:
+      discard
     return hrMore)
   return output
 
