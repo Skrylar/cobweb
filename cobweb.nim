@@ -34,6 +34,7 @@ type
   FilterValueProc* [V] = proc(value: V): bool {.closure.}
   MapEventProc* [E, R] = proc(event: Event[E]): R {.closure.}
   MapValueProc* [V, R] = proc(value: V): R {.closure.}
+  PredicateProc* = proc(): bool {.closure.}
 
   ObserverFlag = enum
     ofDead
@@ -165,7 +166,7 @@ proc take_until* [E, J] (observer: Observer[E]; observer2: Observer[J]): Observe
       if event.kind == etEnd:
         output.close()
         return hrNoMore
-      else
+      else:
         output.dispatch(event)
         return hrMore)
   return output
@@ -265,6 +266,21 @@ proc map_error*[E, R] (observer: Observer[E];
     if event.is_error:
       output.dispatch(fn(event.error))
     return hrMore)
+  return output
+
+proc take_while* [E] (observer: Observer[E]; fn: PredicateProc): Observer[E] =
+  var output = new(Observer[E])
+  observer.subscribe(proc (event: Event[E]): HandlerResult =
+    case event.kind:
+    of etEnd:
+      output.close()
+      return hrNoMore
+    of etError, etInitial, etNext:
+      if fn():
+        output.dispatch(event)
+        return hrMore
+      else:
+        return hrNoMore)
   return output
 
 proc value* [E](property: Property): E {.inline.} =
