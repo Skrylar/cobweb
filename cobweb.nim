@@ -35,8 +35,11 @@ type
   MapEventProc* [E, R] = proc(event: Event[E]): R {.closure.}
   MapValueProc* [V, R] = proc(value: V): R {.closure.}
 
+  ObserverFlag = enum
+    ofDead
+
   Observer* [E] = ref object {.inheritable.}
-    dead: bool
+    flags: set[ObserverFlag]
     subscriptions: seq[HandlerProc[E]]
 
   Property* [E] = ref object of Observer[E]
@@ -57,7 +60,7 @@ proc is_error* [E](self: Event[E]): bool =
 proc dispatch*[E] (observer: Observer[E]; event: Event[E]) =
   ## Sends an event to all subscribers of this observer.
   template subs: untyped = observer.subscriptions
-  if observer.dead: return
+  if ofDead in observer.flags: return
   if subs == nil or subs.len < 1:
     # sanity check
     return
@@ -65,6 +68,7 @@ proc dispatch*[E] (observer: Observer[E]; event: Event[E]) =
   # transmit the event
   var idx = 0
   while idx < subs.len:
+
     var s = subs[idx]
     case s(event)
     of hrMore:
@@ -109,21 +113,38 @@ proc close*[E] (observer: Observer[E]) =
 
   # RIP
   observer.dispatch(e)
-  observer.dead = true
+  incl observer.flags, ofDead
 
 proc sink*[E] (observer: Observer[E]): SinkProc[E] =
   ## Produces a sink closure. Calling this closure and
   ## providing an event is equivalent to calling dispatch
   ## on the observer itself.
   return proc(value: E): SinkResult =
-    if observer.dead:
+    if ofDead in observer.flags:
       return srNoMore
     else:
       observer.dispatch(value)
-      if observer.dead:
+      if ofDead in observer.flags:
         return srNoMore
       else:
         return srMore
+
+proc take* [E] (observer: Observer[E]; count: int): Observer[E] =
+  ## Returns a new observer which will accept at most
+  ## `count` values from this observer. Errors, initial
+  ## values, and end of stream notifications are not counted.
+  var output = new(Observer[E])
+  var spuds = count
+  observer.subscribe(proc (event: Event[E]): HandlerResult =
+    if event.kind == etNext:
+      dec spuds
+      output.dispatch(event)
+
+      if spuds < 1:
+        output.close()
+        return hrNoMore
+    return hrMore)
+  return output
 
 proc do_action*[E] (observer: Observer[E]; fn: DoActionProc[E]): Observer[E] {.discardable.} =
   observer.subscribe(proc (event: Event[E]): HandlerResult =
